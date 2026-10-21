@@ -1,6 +1,6 @@
 name: Build Shiba Yuki APK
 
-on:
+'on':
 workflow_dispatch:
 
 permissions:
@@ -20,10 +20,10 @@ steps:
     shell: bash
     run: |
       set -euo pipefail
-      if [ ! -f "shiba-yuki-twiksi.zip" ]; then
-        echo "::error::File shiba-yuki-twiksi.zip was not found in the repository root."
+      test -f shiba-yuki-twiksi.zip || {
+        echo "::error::Archive shiba-yuki-twiksi.zip not found in repository root."
         exit 1
-      fi
+      }
       unzip -tq shiba-yuki-twiksi.zip
 
   - name: Extract Android project
@@ -34,18 +34,15 @@ steps:
       unzip -q shiba-yuki-twiksi.zip -d source
 
       GRADLEW="$(find source -type f -name gradlew -print -quit)"
-
       if [ -z "$GRADLEW" ]; then
-        echo "::error::gradlew was not found in the extracted archive."
+        echo "::error::Gradle wrapper not found."
         exit 1
       fi
 
       PROJECT_DIR="$(dirname "$GRADLEW")"
 
-      if [ ! -f "$PROJECT_DIR/settings.gradle.kts" ] || [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-        echo "::error::Android project files are missing."
-        exit 1
-      fi
+      test -f "$PROJECT_DIR/settings.gradle.kts"
+      test -f "$PROJECT_DIR/app/build.gradle.kts"
 
       echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
       echo "APK_PATH=$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
@@ -56,11 +53,11 @@ steps:
       distribution: temurin
       java-version: '17'
 
-  - name: Make Gradle wrapper executable
+  - name: Prepare Gradle
     shell: bash
     run: chmod +x "$PROJECT_DIR/gradlew"
 
-  - name: Build debug APK
+  - name: Build APK
     shell: bash
     run: |
       set -euo pipefail
@@ -71,10 +68,10 @@ steps:
     shell: bash
     run: |
       set -euo pipefail
-      if [ ! -s "$APK_PATH" ]; then
-        echo "::error::APK was not created."
+      test -s "$APK_PATH" || {
+        echo "::error::APK was not generated."
         exit 1
-      fi
+      }
       ls -lh "$APK_PATH"
 
   - name: Upload APK
