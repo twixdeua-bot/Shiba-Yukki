@@ -1,56 +1,49 @@
-name: Build Kotoba APK
+name: Build Shiba Yuki APK
 
-on:
-workflow_dispatch:
+'on': [workflow_dispatch]
 
 permissions:
-contents: read
+  contents: read
 
 jobs:
-build:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout repository
-uses: actions/checkout@v4
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: 'actions/checkout@v4'
 
-  - name: Extract project
-    run: |
-      mkdir project
-      unzip -q kotoba-learn-russian-fixed.zip -d project
-      find project -maxdepth 4 -type f | head -100
+      - name: Set up Java 17
+        uses: 'actions/setup-java@v4'
+        with:
+          distribution: temurin
+          java-version: '17'
 
-  - name: Set up Java
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: '17'
+      - name: Check and extract source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f shiba-yuki-twiksi.zip || { echo 'ERROR: Upload shiba-yuki-twiksi.zip to the repository root.'; exit 1; }
+          unzip -tq shiba-yuki-twiksi.zip
+          mkdir -p source
+          unzip -q shiba-yuki-twiksi.zip -d source
+          test -f source/kotoba-learn-main/gradlew || { echo 'ERROR: gradlew not found in expected archive folder.'; find source -maxdepth 3 -type f | head -80; exit 1; }
+          test -f source/kotoba-learn-main/settings.gradle.kts
+          test -f source/kotoba-learn-main/app/build.gradle.kts
+          chmod +x source/kotoba-learn-main/gradlew
 
-  - name: Set up Gradle
-    uses: gradle/actions/setup-gradle@v4
-    with:
-      gradle-version: '8.7'
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd source/kotoba-learn-main
+          ./gradlew --no-daemon assembleDebug
 
-  - name: Show project structure
-    run: |
-      find project -name settings.gradle -o -name settings.gradle.kts
-      find project -name gradlew
-
-  - name: Build APK
-    run: |
-      cd project
-      SETTINGS="$(find . -name settings.gradle -o -name settings.gradle.kts | head -1)"
-      if [ -z "$SETTINGS" ]; then
-        echo "Gradle settings file not found"
-        exit 1
-      fi
-      DIR="$(dirname "$SETTINGS")"
-      cd "$DIR"
-      gradle assembleDebug
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: kotoba-debug-apk
-      path: project/**/build/outputs/apk/debug/*.apk
-      if-no-files-found: error
-      retention-days: 30
+      - name: Upload APK
+        uses: 'actions/upload-artifact@v4'
+        with:
+          name: shiba-yuki-twiksi-apk
+          path: source/kotoba-learn-main/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
