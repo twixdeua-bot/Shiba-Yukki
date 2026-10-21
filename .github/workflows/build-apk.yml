@@ -1,4 +1,5 @@
 name: Build Shiba Yuki APK
+
 'on':
   workflow_dispatch:
 
@@ -10,6 +11,7 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,32 +26,85 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f shiba-yuki-twiksi.zip || { echo '::error::Upload shiba-yuki-twiksi.zip to the repository root.'; exit 1; }
+
+          test -f shiba-yuki-twiksi.zip || {
+            echo '::error::Upload shiba-yuki-twiksi.zip to the repository root.'
+            exit 1
+          }
+
           unzip -tq shiba-yuki-twiksi.zip
+
           mkdir -p source
           unzip -q shiba-yuki-twiksi.zip -d source
+
           GRADLEW="$(find source -type f -name gradlew -print -quit)"
-          test -n "$GRADLEW" || { echo '::error::Gradle wrapper (gradlew) was not found in the archive.'; exit 1; }
+
+          test -n "$GRADLEW" || {
+            echo '::error::Gradle wrapper (gradlew) was not found in the archive.'
+            exit 1
+          }
+
           PROJECT_DIR="$(dirname "$GRADLEW")"
-          test -f "$PROJECT_DIR/settings.gradle.kts" || { echo '::error::settings.gradle.kts was not found beside gradlew.'; exit 1; }
-          test -f "$PROJECT_DIR/app/build.gradle.kts" || { echo '::error::app/build.gradle.kts was not found.'; exit 1; }
+
+          test -f "$PROJECT_DIR/settings.gradle.kts" || {
+            echo '::error::settings.gradle.kts was not found beside gradlew.'
+            exit 1
+          }
+
+          test -f "$PROJECT_DIR/app/build.gradle.kts" || {
+            echo '::error::app/build.gradle.kts was not found.'
+            exit 1
+          }
+
           chmod +x "$GRADLEW"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "APK_PATH=$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
+
+          echo "Project directory: $PROJECT_DIR"
+          echo "Archive structure verified successfully."
 
       - name: Build debug APK
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
           cd "$PROJECT_DIR"
-          ./gradlew --no-daemon --stacktrace assembleDebug
+
+          set +e
+          ./gradlew --no-daemon --stacktrace --info assembleDebug 2>&1 | tee build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$BUILD_STATUS" -ne 0 ]; then
+            echo "::group::Compilation error details"
+
+            grep -n -B 4 -A 8 -Ei \
+              '(^e: |error:|Unresolved reference|Expecting|Compilation error|What went wrong|FAILURE:)' \
+              build.log || true
+
+            echo "::endgroup::"
+
+            echo "::error::Android build failed with exit code $BUILD_STATUS"
+
+            exit "$BUILD_STATUS"
+          fi
+
+          echo "BUILD SUCCESSFUL"
 
       - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
-          test -s "$APK_PATH" || { echo '::error::APK was not generated.'; exit 1; }
+
+          test -s "$APK_PATH" || {
+            echo '::error::APK was not generated.'
+            exit 1
+          }
+
           ls -lh "$APK_PATH"
+
+          echo "APK verified successfully."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
